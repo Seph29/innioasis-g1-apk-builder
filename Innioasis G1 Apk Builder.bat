@@ -1,45 +1,38 @@
 @echo off
 setlocal EnableDelayedExpansion
 
-echo Please move APK file to "in" folder:
-pause
+:: Clean previous APKs
+del ".\Data\in\*.apk" 2>nul
 
-set "LEFT_PATH=%USERPROFILE%\Downloads"
-set "RIGHT_PATH=.\Data\in"
+:: File selection dialog with secure file paths
+set "psCommand=Add-Type -AssemblyName System.Windows.Forms; $dialog=New-Object System.Windows.Forms.OpenFileDialog; "
+set "psCommand=!psCommand! $dialog.Filter='APK Files (*.apk)|*.apk'; "
+set "psCommand=!psCommand! if($dialog.ShowDialog() -eq 'OK') { "
+set "psCommand=!psCommand! $source=$dialog.FileName; $dest='Data\in\' + [System.IO.Path]::GetFileName($source); "
+set "psCommand=!psCommand! [System.IO.File]::Copy($source, $dest, $true) "
+set "psCommand=!psCommand! } else { exit 1 }"
 
-start explorer "%LEFT_PATH%"
-start explorer "%RIGHT_PATH%"
+powershell -Command "!psCommand!"
+if errorlevel 1 (
+    echo Operation cancelled
+    timeout /t 2 /nobreak >nul
+    exit /b
+)
 
-timeout /t 3 /nobreak >nul
+:: Additional validation: verify that the file was successfully copied
+for %%F in (".\Data\in\*.apk") do (
+    set "apkFile=%%~nxF"
+)
+if not defined apkFile (
+    echo Error: APK file could not be copied.
+    timeout /t 2 /nobreak >nul
+    exit /b
+)
 
-powershell -Command ^
-    "Add-Type -AssemblyName System.Windows.Forms; " ^
-    "$shell = New-Object -ComObject Shell.Application; " ^
-    "$windows = $shell.Windows(); " ^
-    "$count = $windows.Count; " ^
-    "$leftSet = $false; " ^
-    "$rightSet = $false; " ^
-    "for ($i = 0; $i -lt $count; $i++) { " ^
-    "    $win = $windows.Item($i); " ^
-    "    $name = $win.LocationName; " ^
-    "    if ($name -eq 'Downloads' -and -not $leftSet) { " ^
-    "        $win.Left = 0; " ^
-    "        $win.Top = 0; " ^
-    "        $win.Width = [math]::Round([System.Windows.Forms.Screen]::PrimaryScreen.Bounds.Width / 2); " ^
-    "        $win.Height = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds.Height; " ^
-    "        $leftSet = $true; " ^
-    "    } elseif ($name -eq 'in' -and -not $rightSet) { " ^
-    "        $win.Left = [math]::Round([System.Windows.Forms.Screen]::PrimaryScreen.Bounds.Width / 2); " ^
-    "        $win.Top = 0; " ^
-    "        $win.Width = [math]::Round([System.Windows.Forms.Screen]::PrimaryScreen.Bounds.Width / 2); " ^
-    "        $win.Height = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds.Height; " ^
-    "        $rightSet = $true; " ^
-    "    } " ^
-    "}" >nul 2>&1
-
+:: Success confirmation
 cls
-echo Please continue once file is moved:
-pause
-powershell -Command "(New-Object -com shell.application).Windows() | Where-Object {$_.Name -eq 'File Explorer'} | ForEach-Object {$_.Quit()}"
-cls
+echo APK file (!apkFile!) successfully copied to .\Data\in\
+timeout /t 2 /nobreak >nul
+
+:: Continue processing
 cd /d "./Data" && call start.bat
